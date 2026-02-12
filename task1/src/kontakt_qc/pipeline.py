@@ -35,7 +35,7 @@ def evaluate_call(payload: Dict[str, Any]) -> Dict[str, Any]:
         call = CallTranscript(call_id="UNKNOWN_CALL", segments=tuple())
 
     # Chaos guard: if transcript effectively empty or too short, skip heavy work.
-    # Spec: if audio < 0.1 sec -> model shouldn't run.
+    # Specification: if audio < 0.1 sec -> model shouldn't run.
     if call.total_duration < 0.1 or len(call.segments) == 0:
         empty: Dict[str, CriterionResult] = {
             "KR2.1": CriterionResult(0, "Transkript çox qısadır və ya boşdur; qiymətləndirmə aparılmadı.", "LOW"),

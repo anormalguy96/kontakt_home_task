@@ -1,8 +1,10 @@
-## Task 1 — Zəng Keyfiyyətinin Qiymətləndirilməsi Sistemi
+## Task 1 — Zəng Keyfiyyətinin Qiymətləndirilməsi Sistemi (Kontakt)
 
-### Layihənin məqsədi
+Bu layihə müştəri xidmətləri zəng transkriptlərini avtomatik qiymətləndirən prototipdir. Fokus “model gücü” deyil, _rule + LLM + guardrails_ məntiqidir.
 
-Bu layihə müştəri xidmətləri zəng transkriptlərinin avtomatlaşdırılmış şəkildə qiymətləndirilməsi üçün hazırlanmış funksional prototipdir. Sistem zəng keyfiyyətini aşağıdakı 5 əsas meyar üzrə ölçür və strukturlaşdırılmış nəticə təqdim edir:
+## 1) Layihənin məqsədi
+
+Sistem zəng keyfiyyətini 5 əsas meyar üzrə ölçür və strukturlaşdırılmış nəticə qaytarır:
 
 - **KR2.1 — sahiblik və proaktiv dəstək**
 - **KR2.2 — anlama və effektiv kommunikasiya**
@@ -10,171 +12,232 @@ Bu layihə müştəri xidmətləri zəng transkriptlərinin avtomatlaşdırılm�
 - **KR2.4 — prosesin idarə olunması və növbəti addımlar**
 - **KR2.5 — peşəkarlıq və uyğunluq (PII təhlükəsizliyi daxil olmaqla)**
 
-Layihənin əsas məqsədi:
+Əsas məqsədlər:
 
-- Deterministik və izah edilə bilən (interpretable) scoring mexanizmi təqdim etmək
-- Hallüsinasiyalara qarşı qorunan qiymətləndirmə modeli qurmaq
-- Genişlənə bilən (scalable) arxitektura təmin etmək
-
----
-
-### Sistem arxitekturası
-
-Sistem modul əsaslı arxitekturaya malikdir:
-
-```
-src/kontakt_qc/
-│
-├── types.py        # Data modelləri və parsing
-├── preprocess.py   # Normallaşdırma və PII maskalama
-├── rules.py        # Qayda əsaslı scoring mühərriki
-├── pipeline.py     # Qiymətləndirmə orkestrasiyası
-└── cli.py          # Komanda sətri interfeysi
-```
-
-Əlavə komponentlər:
-
-- `evaluate.py` — verilmiş dataset üzərində accuracy hesablanması
-- `tests/` — avtomatlaşdırılmış testlər (pytest)
-- `Dockerfile` və `docker-compose.yml` — konteynerləşdirmə
-- `.github/workflows/` — CI inteqrasiyası
+- Deterministik və izah edilə bilən skorinq (rule-based)
+- LLM istifadə olunarsa belə, anti-hallucination qoruması (ki, bu da **evidence verification** vasitəsilə həyata keçirilir)
+- PII sızmasının qarşısının alınması
+- Robust parsing (boş/broken JSON faylları, çatışmayan məlumatlar, qarışıq timestamp-lar)
+- Test + CI + Docker ilə “production mindset”
 
 ---
 
-### Texniki yanaşma
+## 2) Repo xəritəsi (Repo Map)
 
-#### Əsas qiymətləndirmə mexanizmi (rule-based)
+```cmd
+task1/
+  src/kontakt_qc/
+    cli.py
+    pipeline.py
+    rules.py
+    preprocess.py
+    llm.py
+    prompt_loader.py
+    models.py
+    hybrid.py
+  prompts/
+    kr_scoring_system_prompt.yaml
+  docs/
+    Task-1.docx
+    Task_1_Eval_dataset.json
+  tests/
+    test_*.py
+  evaluate.py
+  Dockerfile
+  docker-compose.yml
+  .github/workflows/ci.yml
+  requirements.txt
+  README.md
+  .gitignore
+  .env.example
+```
 
-Sistem ilkin olaraq qayda-əsaslı yanaşmadan istifadə edir. Bunun səbəbləri:
+## 3) Quraşdırma (Local Setup)
 
-- Deterministik davranış
-- API xərclərinin olmaması
-- Hallüsinasiyaların qarşısının alınması
+### 3.1 Virtual env
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 3.2 Tələb olunan modulların quraşdırılması
+
+```powershell
+pip install -r requirements.txt
+pip install -e .
+```
+
+### 3.3 Testlərin icrası
+
+```powershell
+python -m pytest -q
+```
+
+## 4) Usage
+
+### 4.1 CLI ilə işlətmə
+
+**Qeyd:** CLI parametrləri cli.py-də necə implement olunubsa ona uyğun işləyir.
+
+Nümunə (concept):
+
+```powershell
+python -m kontakt_qc.cli --input sample.json --mode rule --output out.json
+```
+
+Mode-lar:
+
+**rule (default):** LLM tələb etmir
+**hybrid:** rule + (opsional) LLM, guardrails ilə
+**llm:** yalnız LLM (yenə guardrails saxlanılır)
+
+### 4.2 Evaluation (dataset accuracy)
+
+```powershell
+python evaluate.py --mode rule
+python evaluate.py --mode hybrid
+python evaluate.py --mode llm
+```
+
+`evaluate.py` nəticəni JSON şəklində stdout-a yazır (automation-friendly).
+
+## 5) Environment variables
+
+### 5.1 Ümumi konfiqurasiya
+
+```python
+KONTAKT_QC_MODE=rule|hybrid|llm
+LOG_LEVEL=INFO|DEBUG
+```
+
+### 5.2 LLM opsional parametrlər (API məcburi deyil)
+
+Default MODE=rule heç bir API açarı tələb etmir.
+
+LLM aktivləşdirmək üçün:
+
+```python
+KONTAKT_LLM_PROVIDER=groq|stub|none
+KONTAKT_LLM_MODEL=...          # istəyə bağlıdır (defolt: llama-3.1-8b-instant)
+KONTAKT_LLM_TIMEOUT_SECONDS=30 # istəyə bağlıdır
+GROQ_API_KEY=...               # yalnız provider=groq üçün
+```
+
+Windows (PowerShell) nümunə:
+
+```powershell
+setx KONTAKT_LLM_PROVIDER groq
+setx GROQ_API_KEY "YOUR_KEY"
+setx KONTAKT_LLM_MODEL "llama-3.1-8b-instant"
+```
+
+## 6) Texniki yanaşma və qərarlar
+
+### 6.1 Niyə rule-based default?
+
+- Deterministik davranış (predictable)
 - İzah edilə bilən nəticələr
+- API xərci yoxdur
+- Hallüsinasiyadan minimum risk
 
-Qiymətləndirmə:
+### 6.2 Hybrid/LLM nə zaman işə düşür?
 
-- Pattern matching
-- Kontekstual açar söz analizləri
-- Prosessual indikatorların aşkarlanması
-- PII və daxili məlumat sızmasının müəyyən edilməsi
+LLM yalnız hybrid/llm rejimində aktiv olur.
 
----
+Bunun məqsədi uzun/kompleks transkriptlərdə semantik interpretasiya aparmaq, həmçinin qarışıq dil strukturlarını (multilang) düzgün analiz etməkdir.
 
-#### Hibrid (LLM) yanaşma
+Əsas fokus model seçimi deyil, rule + LLM + guardrail kombinasiyasıdır.
 
-Sistem istəyə bağlı olaraq LLM inteqrasiyasını dəstəkləyir.
+### 6.3 Anti-hallucination guard (evidence verification)
 
-Dəstəklənən rejimlər:
+LLM nəticələri qəbul olunmamışdan əvvəl:
 
-- `rule` (default)
-- `hybrid`
-- `llm`
+- model “evidence snippet” qaytarır
+- həmin snippet transkript daxilində sözbəsöz (normalise olunmuş) tapılmalıdır
+- **tapılmırsa** → LLM nəticəsi rədd edilir və fallback tətbiq olunur
 
-LLM istifadəsi aşağıdakı hallarda məqsədəuyğundur:
+### 6.4 PII təhlükəsizliyi (PII Safety)
 
-- Uzun və kompleks transkriptlər
-- Qarışıq dil strukturları
-- Daha zəngin semantik izah tələb olunduqda
+Transkript LLM-ə göndərilməzdən əvvəl PII maskalanır
 
-#### Anti-hallüsinasiyaya qarşı mexanizm
+Output-da açıq PII saxlanılmır (evidence/reasoning daxil)
 
-LLM nəticələri qəbul edilməzdən əvvəl aşağıdakılar yoxlanılır:
+## 7) Hard guards & robustluq
 
-1. Model tərəfindən qaytarılmış **evidence snippet**
-2. Həmin snippet-in transkript daxilində sözbəsöz mövcudluğu
-3. Mövcud deyilsə → nəticə rədd edilir və rule-based mexanizmə geri dönülür
+### 7.1 <0.1s short-audio guard
 
-Bu mexanizm sistemin audit edilə bilən və etibarlı qalmasını təmin edir.
+Əgər ümumi müddət **< 0.1** saniyə olarsa:
 
----
+- model **çağırılmır** (LLM skip)
+- sistem **crash olmur**
+- **score=0** qaytarılır
 
-### Robustluq və səhv hallarının idarə edilməsi
+### 7.2 Broken/empty input
 
-Sistem aşağıdakı halları təhlükəsiz şəkildə idarə edir:
+Boş/zədələnmiş JSON payload
 
-- Boş və ya zədələnmiş JSON payload
-- Eksik sahələr
-- Qarışıq timestamp formatları
-- Ümumi müddət `< 0.1 saniyə`
-- Segmentlərin olmaması
+Missing fields
 
-Belə hallarda sistem crash olmur və spesifikasiyaya uyğun olaraq `score = 0` qaytarır.
+Qarışıq timestamp formatları
 
----
+Segmentlərin olmaması
+halları “graceful” şəkildə idarə olunur (warning logs + safe fallback).
 
-### PII Təhlükəsizliyi
+## 8) LLM seçimi və səbəb (Groq) — səbəb → nəticə
 
-Sistem aşağıdakı həssas məlumatları aşkarlayır:
+Bu tapşırıq üçün ödənişli API-lərdən istifadə məcburi deyil. Layihə default olaraq heç bir LLM olmadan işləyir (MODE=rule).
 
-- Kredit kartı tipli rəqəm ardıcıllıqları
-- CVV/CVC
-- FIN kodları
+Opsional provider kimi Groq seçilib, çünki:
 
-Təhlükəsizlik prinsipləri:
+- **Səbəb 1**: Çox sürətli inference (aşağı latency)
+- **Nəticə**: Pipeline iterasiyası, test və debugging daha sürətli olur; real-time ssenariyə daha uyğun görünür.
 
-- Evidence snippet-lər maskalanır
-- Daxili sistem məlumatlarının sızması flag edilir
-- Çıxışda heç bir açıq PII saxlanılmır
+- **Səbəb 2**: Pulsuz tier mövcuddur / aşağı xərcli işləyir
+- **Nəticə**: Tapşırığın “ödənişsiz məcburi deyil” şərti pozulmur; eyni zamanda LLM inteqrasiyası göstərilir.
 
----
+- **Səbəb 3**: OpenAI-compatible API formatı
+- **Nəticə**: Adapter sadə qalır (vendor lock-in az), pipeline hissəsi aydın və audit edilə bilən olur.
 
-### Qiymətləndirmə və ölçmə
+Qeyd: LLM istifadə olunsa belə, nəticələr guardrails ilə qorunur:
 
-Verilmiş `Task_1_Eval_dataset.json` dataset üzərində sistem:
+- JSON parse (best-effort) + fallback
 
-- Hər KR üzrə accuracy
-- Ümumi accuracy
+evidence check (anti-hallucination)
 
-hesablayır.
+PII masking (defense-in-depth)
 
-Qiymətləndirmə skripti:
+## 9) Docker
 
-```bash
-python evaluate.py
-```
-
----
-
-### Konteynerləşdirmə və CI
-
-#### Docker
-
-```bash
+```powershell
 docker build -t kontakt-qc .
-docker run --rm kontakt-qc
+docker run --rm kontakt-qc python -m pytest -q
 ```
 
-#### CI
+## 10) Continuous Integration (CI)
 
-GitHub Actions:
+GitHub Actions workflow:
 
-- Testlərin avtomatik icrası
-- Kod sabitliyinin təmin edilməsi
+pytest testlərinin avtomatik icrası
 
----
+basic quality gates
 
-### Performans və genişlənmə potensialı
+## 11) Potensial çətinliklər və həllər
 
-Gələcək inkişaf istiqamətləri:
+**Inconsistent timestamp formatları** → robust parsing + safe defaults
 
-- Real call-center datası ilə lüğətlərin zənginləşdirilməsi
-- Dil aşkarlama modulu
-- LLM modulu üçün daha sərt validasiya mexanizmləri
-- FastAPI servis qatının əlavə olunması
-- Yük testləri və performans optimizasiyası
+**Multilang transkript** → normalize + hybrid option
 
----
+**Hallüsinasiyalar** → evidence verification + fallback
 
-### Nəticə
+**PII sızması** → mask_pii_in_text (input+output)
 
-Hazırkı prototip:
+## 12) Gələcək inkişaf (Improvements)
 
-- Deterministik
-- Audit edilə bilən
-- Hallüsinasiyaya qarşı qorunan
-- Konteynerləşdirilmiş
-- Testlərlə dəstəklənmiş
-- Genişlənə bilən arxitekturaya malik
+Daha geniş PII pattern-lər (telefon/email və s.)
 
-bir zəng keyfiyyəti qiymətləndirmə sistemidir.
+Language detection + per-language keyword lexicon
+
+KR-lərə görə daha zəngin error analysis (confusion cases)
+
+FastAPI service layer + load tests + structured observability
