@@ -1,0 +1,33 @@
+{
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".pytest_cache",
+    ".venv"
+  ],
+  "stubPath": "src",
+  "venvPath": ".",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "src",
+      "pythonVersion": "3.10",
+      "extraPaths": [
+        "src"
+      ]
+    },
+    {
+      "root": "tests",
+      "pythonVersion": "3.10",
+      "extraPaths": [
+        "src"
+      ]
+    }
+  ],
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "pythonVersion": "3.10"
+}

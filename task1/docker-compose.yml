@@ -1,0 +1,5 @@
+services:
+  qc:
+    build: .
+    image: kontakt-qc
+    command: ["python", "evaluate.py"]

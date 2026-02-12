@@ -1,0 +1,23 @@
+{
+  "call_id": "AZ_DEMO_0001",
+  "segments": [
+    {
+      "speaker": "Operator",
+      "text": "Salam, Kontakt Home, operator Ayşədir. Sizə necə kömək edə bilərəm?",
+      "start_time": 0.5,
+      "end_time": 4.2
+    },
+    {
+      "speaker": "Customer",
+      "text": "Salam, mənim internetim işləmir.",
+      "start_time": 5.0,
+      "end_time": 7.1
+    },
+    {
+      "speaker": "Operator",
+      "text": "Başa düşürəm, bu çox narahat edicidir. Gəlin birlikdə həll edək.",
+      "start_time": 7.5,
+      "end_time": 10.3
+    }
+  ]
+}

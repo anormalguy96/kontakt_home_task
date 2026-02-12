@@ -1,0 +1,32 @@
+{
+  "AZ_DEMO_0001": {
+    "KR2.1": {
+      "score": 3,
+      "reasoning": "Operator məsuliyyəti üzərinə götürür və aktiv addım təklif edir (həll/alternativ/texnik/ticket).",
+      "probability": "HIGH",
+      "evidence_snippet": "[7.5-10.3] Operator: Başa düşürəm, bu çox narahat edicidir. Gəlin birlikdə həll edək."
+    },
+    "KR2.2": {
+      "score": 3,
+      "reasoning": "Operator problemi anlayır, düzgün suallar verir və/və ya empatiya ilə kommunikasiya edir.",
+      "probability": "HIGH",
+      "evidence_snippet": "[0.5-4.2] Operator: Salam, Kontakt Home, operator Ayşədir. Sizə necə kömək edə bilərəm?"
+    },
+    "KR2.3": {
+      "score": 3,
+      "reasoning": "Operator müştəri üçün praktik və aydın həll təqdim edir (addım-addım və ya düzgün informasiya).",
+      "probability": "MEDIUM"
+    },
+    "KR2.4": {
+      "score": 3,
+      "reasoning": "Operator növbəti addımları və gözləntiləri aydın bildirir (qeydiyyat, ticket, vaxt çərçivəsi, alternativ kanal).",
+      "probability": "MEDIUM"
+    },
+    "KR2.5": {
+      "score": 3,
+      "reasoning": "Operator peşəkar və nəzakətli ünsiyyət qurur (etiket, ton, şirkət brendi qorunur).",
+      "probability": "MEDIUM",
+      "evidence_snippet": "[0.5-4.2] Operator: Salam, Kontakt Home, operator Ayşədir. Sizə necə kömək edə bilərəm?"
+    }
+  }
+}

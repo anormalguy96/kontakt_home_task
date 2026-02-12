@@ -1,0 +1,19 @@
+{
+  "include": [
+    "task1/src"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "task1/src",
+      "pythonVersion": "3.11",
+      "pythonPlatform": "Windows"
+    }
+  ],
+  "venvPath": "task1",
+  "venv": ".venv"
+}
