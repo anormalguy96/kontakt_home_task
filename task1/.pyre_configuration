@@ -1,9 +1,0 @@
-{
-  "source_directories": [
-    "src"
-  ],
-  "search_path": [
-    "src"
-  ],
-  "strict": false
-}

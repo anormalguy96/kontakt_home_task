@@ -1,0 +1,12 @@
+﻿services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ASR_BACKEND=onnx_int8
+      - ASR_MODEL_DIR=/app/models/onnx
+    volumes:
+      - ./models:/app/models
+      - ./artifacts:/app/artifacts
+      - ./samples:/app/samples

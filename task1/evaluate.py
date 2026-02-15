@@ -1,133 +1,101 @@
 from __future__ import annotations
 
-import argparse, json, logging, os, sys
+import argparse
+import json
+import os
+import sys
 from pathlib import Path
-from typing import Dict, Any
 
-sys.path.append(str(Path(__file__).resolve().parent / "src"))
+from dotenv import load_dotenv
 
-from kontakt_qc.pipeline import evaluate_call  # noqa: E402
+# bu hissənin nə işə yaradığını belə izah etmək olar:
+# əgər biz bu proqramı pip install -e . etmədən birbaşa işə salırıqsa, o zaman proqram "src" qovluğunu tapıb içindəki modulları (config, preprocess, evaluator) import edə bilmir.
+# ROOT = Path(__file__).resolve().parent — bu hissə proqramın yerləşdiyi qovluğu tapır.
+# sys.path.insert(0, str(ROOT / "src")) — bu hissə tapdığımız "src" qovluğunu Python-un import yollarına əlavə edir ki, proqram "src" içindəki faylları (məsələn, qc_service.config) rahatlıqla import edə bilsin.
+# əgər proqramı pip install -e . ilə quraşdırsaq, bu hissəyə ehtiyac qalmır, çünki quraşdırma zamanı Python import yolları avtomatik düzəldilir.
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from qc_service.config import load_settings
+from qc_service.preprocess import normalize_transcript
+from qc_service.evaluator import evaluate_transcript
 
 
-def configure_logging() -> None:
-    logging.basicConfig(
-        level=os.getenv("LOG_LEVEL", "INFO"),
-        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
-    )
+def main() -> int:
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--dataset", default="data/Task_1_Eval_dataset.json")
+  parser.add_argument("--use-llm", action="store_true", help="USE_LLM=1 ilə eynidir, amma yalnız bu run üçün")
 
+  # debugging üçün nəzərdə tutulan arqumentlər
+  # production-ready versiyada bu arqumentlər silinə də bilər
+  parser.add_argument("--debug", action="store_true", help="Uyğunsuz (mismatch) nümunələri çap et")
+  parser.add_argument("--debug-kr", default="", help="Məs: KR2.5 — yalnız seçilmiş KR üçün mismatch çap et")
+  parser.add_argument("--max-mismatches", type=int, default=50, help="Maksimum mismatch sayı (debug üçün)")
+  args = parser.parse_args()
 
-def main(argv: list[str] | None = None) -> int:
-    configure_logging()
-    logger = logging.getLogger("evaluate")
+  load_dotenv()
+  if args.use_llm:
+    os.environ["USE_LLM"] = "1"
 
-    p = argparse.ArgumentParser(description="Evaluate scoring accuracy on provided dataset.")
-    p.add_argument("--mode", choices=["rule", "hybrid", "llm"], default="rule", help="Scoring mode.")
-    p.add_argument(
-        "--dataset",
-        default=str(Path(__file__).parent / "docs" / "Task_1_Eval_dataset.json"),
-        help="Path to evaluation dataset JSON.",
-    )
-    p.add_argument(
-        "--out",
-        default="",
-        help="Optional path to write results JSON (in addition to stdout).",
-    )
-    args = p.parse_args(argv)
+  settings = load_settings()
+  ds = json.loads((ROOT / args.dataset).read_text(encoding="utf-8"))
 
-    os.environ["KONTAKT_QC_MODE"] = args.mode
+  metrics = ["KR2.1", "KR2.2", "KR2.3", "KR2.4", "KR2.5"]
+  per_metric = {k: {"total": 0, "correct": 0} for k in metrics}
 
-    dataset_path = Path(args.dataset)
-    if not dataset_path.exists():
-        fallback = Path("docs/Task_1_Eval_dataset.json")
-        if fallback.exists():
-            dataset_path = fallback
+  total = 0
+  correct = 0
+  mismatches_printed = 0
 
-    if not dataset_path.exists():
-        logger.error("Dataset file not found: %s", dataset_path)
-        return 2
+  for item in ds:
+    call_id = item.get("input", {}).get("call_id") or item.get("call_id") or "UNKNOWN_CALL_ID"
+    transcript = normalize_transcript(item["input"])
+    res = evaluate_transcript(transcript, settings).results
+    exp = item["expected_output"]
 
-    try:
-        data = json.loads(dataset_path.read_text(encoding="utf-8"))
-    except Exception:
-        logger.exception("Failed to read/parse dataset JSON: %s", dataset_path)
-        return 2
+    for k in metrics:
+      per_metric[k]["total"] += 1
+      total += 1
 
-    total: int = 0
-    correct: int = 0
-    per_kr_total: Dict[str, int] = {}
-    per_kr_correct: Dict[str, int] = {}
+      pred_score = res[k].score
+      exp_score = exp[k]["score"]
 
-    for idx, item in enumerate(data):
-        if not isinstance(item, dict):
-            logger.warning("Skipping non-object dataset item at index=%d", idx)
-            continue
+      if pred_score == exp_score:
+        per_metric[k]["correct"] += 1
+        correct += 1
+        continue
 
-        payload = item.get("input")
-        expected = item.get("expected_output")
+      # mismatching case ləri üçün
+      if args.debug:
+        if args.debug_kr and k != args.debug_kr:
+          continue
+        if mismatches_printed >= args.max_mismatches:
+          continue
 
-        if not isinstance(payload, dict) or not isinstance(expected, dict):
-            logger.warning("Skipping invalid dataset item at index=%d (missing input/expected_output)", idx)
-            continue
+        prob = getattr(res[k], "probability", None)
+        ev = getattr(res[k], "evidence_snippet", None)
+        reason = getattr(res[k], "reasoning", None)
 
-        predicted_wrapped = evaluate_call(payload)
-        call_id = payload.get("call_id", "UNKNOWN_CALL")
-        predicted = predicted_wrapped.get(call_id, {})
+        print("\n--- MISMATCH ---")
+        print("call_id:", call_id)
+        print("metric :", k)
+        print("expected:", exp_score, "| predicted:", pred_score)
+        if prob is not None:
+          print("probability:", prob)
+        if ev:
+          print("evidence:", ev)
+        if reason:
+          print("reasoning:", reason)
 
-        for kr, exp in expected.items():
-            if not isinstance(exp, dict):
-                logger.warning("Skipping expected_output[%s] at index=%d (not an object)", kr, idx)
-                continue
+        mismatches_printed += 1
 
-            total += 1
-            per_kr_total[kr] = per_kr_total.get(kr, 0) + 1
+  print("\nOverall accuracy:", round(correct / max(1, total), 4), f"({correct}/{total})")
+  for k, v in per_metric.items():
+    acc = v["correct"] / max(1, v["total"])
+    print(f"{k}: {acc:.4f} ({v['correct']}/{v['total']})")
 
-            pred_score_raw = predicted.get(kr, {}).get("score", -999)
-            exp_score_raw = exp.get("score", -999)
-
-            try:
-                pred_score = int(pred_score_raw)
-                exp_score = int(exp_score_raw)
-            except Exception:
-                logger.warning(
-                    "Non-integer score at index=%d kr=%s pred=%r exp=%r",
-                    idx,
-                    kr,
-                    pred_score_raw,
-                    exp_score_raw,
-                )
-                continue
-
-            if pred_score == exp_score:
-                correct += 1
-                per_kr_correct[kr] = per_kr_correct.get(kr, 0) + 1
-
-    overall_acc: float = float(correct) / float(total) if total > 0 else 0.0
-
-    results: Dict[str, Any] = {
-        "mode": args.mode,
-        "dataset": str(dataset_path),
-        "overall": {"correct": correct, "total": total, "accuracy": round(overall_acc, 6)},
-        "per_kr": {},
-    }
-
-    for kr in sorted(per_kr_total.keys()):
-        c = per_kr_correct.get(kr, 0)
-        t = per_kr_total[kr]
-        kr_acc: float = float(c) / float(t) if t > 0 else 0.0
-        results["per_kr"][kr] = {"correct": c, "total": t, "accuracy": round(kr_acc, 6)}
-
-    sys.stdout.write(json.dumps(results, ensure_ascii=False) + "\n")
-
-    if args.out:
-        try:
-            Path(args.out).write_text(json.dumps(results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            logger.info("Wrote results to %s", args.out)
-        except Exception:
-            logger.exception("Failed to write results to %s", args.out)
-            return 2
-
-    return 0
+  return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+  raise SystemExit(main())

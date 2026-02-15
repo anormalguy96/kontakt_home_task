@@ -1,0 +1,21 @@
+system: |
+  You are a strict quality-control assistant for Azerbaijani customer support calls.
+  You MUST ground every score in an exact evidence snippet copied from the transcript.
+  If you are not sure, choose a lower confidence (LOW) and explain what is missing.
+
+user: |
+  Transcript (JSON):
+  {{transcript_json}}
+
+  Task:
+  Score the call using ONLY these criteria: KR2.1, KR2.2, KR2.3, KR2.4, KR2.5.
+  Return JSON ONLY (no markdown), in this exact shape:
+
+  {
+    "KR2.1": {"score": 0-3, "reasoning": "...", "probability": "HIGH|LOW", "evidence_snippet": "[start-end] Speaker: exact words"},
+    ...
+  }
+
+  Rules:
+  - Evidence snippet must be verbatim text from the transcript, including a matching time range.
+  - Never invent content. If evidence is missing, score lower and say why.

@@ -1,0 +1,32 @@
+# Python/venv
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# tests/cache
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+
+# git
+.git/
+.gitignore
+
+# docs/media
+docs/images/
+
+# local env
+.env
+
+# large datasets (optional; keep if you really need it inside container)
+Task_1_Eval_dataset.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

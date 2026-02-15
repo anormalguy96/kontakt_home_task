@@ -1,0 +1,16 @@
+﻿fastapi
+uvicorn[standard]
+python-multipart
+torch
+transformers
+datasets
+evaluate
+jiwer
+soundfile
+librosa
+numpy
+onnx
+onnxruntime
+optimum[onnxruntime]
+tensorboard
+locust

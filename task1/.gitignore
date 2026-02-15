@@ -1,9 +1,22 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
-.pytest_cache/
-.dist/
-build/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
 *.egg-info/
+dist/
+build/
+
+# virtualenv
+.venv/
+venv/
+
+# dotenv
 .env
+
+# pytest
+.pytest_cache/
+
+# misc
 .DS_Store

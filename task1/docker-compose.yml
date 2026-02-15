@@ -1,5 +1,8 @@
 services:
   qc:
+    platform: linux/amd64
     build: .
-    image: kontakt-qc
-    command: ["python", "evaluate.py"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env

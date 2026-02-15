@@ -1,21 +1,11 @@
-
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 WORKDIR /app
-
-# Minimal runtime deps (no heavy DL libs by default)
-COPY requirements.txt /app/requirements.txt
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src /app/src
-COPY prompts /app/prompts
-COPY evaluate.py /app/evaluate.py
-COPY docs /app/docs
-COPY pyproject.toml /app/pyproject.toml
-
+COPY . .
 RUN pip install -e .
 
-ENV PYTHONPATH=/app/src
-
-# Default command: run evaluation (can override)
-CMD ["python", "evaluate.py"]
+EXPOSE 8000
+CMD ["uvicorn", "qc_service.api:app", "--host", "0.0.0.0", "--port", "8000"]
