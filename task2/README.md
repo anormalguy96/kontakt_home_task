@@ -15,7 +15,7 @@ Bu tapşırıqda “Engineering Centric” (MLOps/Engineer) yanaşmasını seçm
 - Bu repo-nun əsas dəyəri odur ki, avtomatlaşdırılmış pipeline, ONNX + INT8 quantization, FastAPI servis, Docker, və load testingi (Locust) özündə birləşdirsin.
 
 **Nəticə gözləntisi:**
-- Model bəzi hallarda səhv yazsa belə (WER yüksək ola bilər), sistem “production-ready” istiqamətdə hazırlanıb: struktur səliqəlidir, ölçü/latency müqayisəsi var, servis konteynerdə işləyir və load test olunub.
+- Model bəzi hallarda səhv yazsa belə (WER yüksək ola bilər), sistem “production-ready” istiqamətdə hazırlanıb. Struktur səliqəlidir, ölçü/latency müqayisəsi var, servis konteynerdə işləyir və load testing də uğurla tamamlanıb.
 
 ---
 
@@ -88,7 +88,7 @@ python scripts/export.py --checkpoint_dir "cahya/wav2vec2-base-turkish" --onnx_d
 ## 5) Benchmark Report (PyTorch vs ONNX ölçü və sürət)
 Script:
 
-```bash
+```powershell
 python scripts/benchmark.py \
   --checkpoint_dir "cahya/wav2vec2-base-turkish" \
   --onnx_path models/onnx/model.onnx \

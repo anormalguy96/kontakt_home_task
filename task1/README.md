@@ -194,7 +194,7 @@ Layihə aşağıdakı ssenariləri nəzərə alır:
 
 ### Təkmilləşdirmə ideyaları
 
-* PII detection üçün daha güclü masking ola bilər (məs: kart nömrəsini `**** **** **** 1234`)
+* PII detection üçün daha güclü masking ola bilər (məs: kart nömrəsini `**** **** **** 1234`; hansı ki, bununla əlaqədar [proyekt](../task3/) `task3` folderində yerləşdirilmişdir)
 * LLM nəticələri üçün daha ciddi “evidence grounding” tətbiq edilə bilər (segment id-ləri ilə)
 * Daha geniş evaluation dataset və “regression” testləri mümkündür
 * Həmçinin **observability** - structured logging + request id + latency metrik kimi əlavə funksiyalar əlavə edilə bilər.
