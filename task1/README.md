@@ -199,6 +199,4 @@ Layihə aşağıdakı ssenariləri nəzərə alır:
 * Daha geniş evaluation dataset və “regression” testləri mümkündür
 * Həmçinin **observability** - structured logging + request id + latency metrik kimi əlavə funksiyalar əlavə edilə bilər.
 
-### Diqqətiniz üçün təşəkkürlər!
-
-![alt text](https://i.pinimg.com/564x/3b/3b/f0/3b3bf06baa1190825dd76846d848ce06.jpg)
+## Diqqətiniz üçün təşəkkürlər!

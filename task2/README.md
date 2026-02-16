@@ -182,5 +182,3 @@ Current RPS: ~0.6
 Qeyd: Bu rəqəmlər CPU inference, audio upload və real model decode prosesinə görə dəyişə bilər.
 
 ## Diqqətiniz üçün təşəkkürlər!
-
-![alt text](https://i.pinimg.com/564x/3b/3b/f0/3b3bf06baa1190825dd76846d848ce06.jpg)

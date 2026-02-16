@@ -1,126 +1,136 @@
 ﻿# Task 3 — Hybrid PII Protection System (Guardrail + Extractor)
 
-Bu repozitoriya müştərilərin çatbotla yazışarkən paylaşa bildiyi həssas məlumatları (PII) avtomatik aşkar edib maskalamaq üçün qurulmuş **iki mərhələli (cascading)** bir NLP pipeline-dır.
+Bu repo müştərilərin çatbotla yazışanda paylaşa bildiyi həssas məlumatları (PII) avtomatik tapıb maskalamaq üçün hazırlanmış **iki mərhələli (cascading)** NLP pipeline-dır.
 
-Məqsəd çox sadədir:
-- Mesaj təhlükəsizdirsə → gecikmədən buraxılsın (latency < 20ms)
-- Mesajda PII varsa → PII hissələr tapılıb `****` ilə maskalansın
+Məqsəd çox aydındır:
+- Mesaj **təhlükəsizdirsə** (SAFE) → gecikmədən buraxılsın  
+- Mesajda **PII varsa** (UNSAFE) → PII hissələr tapılıb `****` ilə maskalansın
 
-Bu işdə əsas fokus mükəmməl modeldən çox **tam işlək pipeline + optimizasiya + ölçüm** üzərindədir. Açığı, əlçatan GPU imkanım olmadığı və CPU mühitində işlədiyim üçün
-
-![alt text](https://i.pinimg.com/236x/bf/fd/0e/bffd0e24f35c7e61f0b8bc022b94a213.jpg)
-
-training hissəsində “ən yaxşı nəticə” üçün günlərlə gözləmək əvəzinə pipeline-ı real şəkildə işlək edib sonra da ONNX + INT8 quantization ilə sürəti/ölçünü ciddi şəkildə yaxşılaşdırmağa fokuslandım. Bu yanaşma həm praktikdir, həm də tapşırığın ruhuna daha uyğundur.
+Bu tapşırıqda məqsəd maksimum nəticəli model qurmaqdan çox, pipeline-ın real işləməsini və optimizasiyanı göstərmək idi.
 
 ---
 
-## Arxitektura (2 mərhələ)
+## Ümumi arxitektura
 
-### 1) The Guardrail (Binary Classifier)
-Birinci mərhələdə məqsəd mesajın “SAFE/UNSAFE” olduğunu sürətli şəkildə müəyyən etməkdir.
+### 1) Guardrail - Binary Classifier (SAFE / UNSAFE)
+Birinci mərhələ mesajın təhlükəsiz olub-olmadığını **sürətli** müəyyən edir.
 
-- **UNSAFE** (`Label=1`) - `LocalDoc/pii_ner_azerbaijani` dataseti. Bu datasetdəki cümlələri olduğu kimi götürüb `label=1` verilir.
-- **SAFE** (`Label=0`) - `aznlp/azerbaijani-blogs` dataseti. Blog mətnləri cümlələrə bölünür və UNSAFE sayına yaxın miqdarda nümunə götürülür (balans üçün).
+- **UNSAFE (Label=1):** `LocalDoc/pii_ner_azerbaijani`  
+  Bu datasetdə PII olan cümlələr var — olduğu kimi götürülüb `label=1` verilir.
+- **SAFE (Label=0):** `aznlp/azerbaijani-blogs`  
+  Blog mətnləri cümlələrə bölünür və balans üçün UNSAFE sayına yaxın nümunə götürülür.
 
-Çıxış:
-- SAFE → dərhal return (Extractor işə düşmür)
+Axın:
+- SAFE → dərhal cavab (Extractor işə düşmür)
 - UNSAFE → Extractor mərhələsinə ötürülür
 
-### 2) The Extractor (NER / TokenClassification)
-Guardrail “UNSAFE” dedikdə, ikinci model işə düşür və PII hissələri BIO formatında tapır:
+> Qeyd: UNSAFE tərəfdə 120k+ sətir görməyinizin səbəbi “sample” yox, dataseti bütöv split kimi load etməyimizdir. Sürətli test üçün isə `--max_unsafe` ilə limitləyirik.
+
+---
+
+### 2) Extractor - NER / TokenClassification (PII tapmaq)
+Guardrail “UNSAFE” dedikdə ikinci model işə düşür və mətndə PII hissələri tapır:
 
 - `PERSON`
 - `FIN`
 - `PHONE`
 - `CARD`
 
-Bu mərhələdə real data limitləri və format spesifikliyi səbəbilə sintetik data istifadə olunur:
-- `scripts/synthetic_ner_generator.py` minlərlə BIO etiketli nümunə yaradır
-
-#### Not: Sözügedən `scripts/synthetic_ner_generator.py` skriptini manual olaraq deklarasiya edib yazmağımın səbəbi tapşırıq sənədində bu skriptin olmamasıdır.
-
----
-
-## Niyə “full dataset + uzun training” etmədim?
-
-Tapşırıqda “pipeline və düşüncə tərzi” önə çıxır — mən də eyni yanaşmanı seçdim.
-
-- CPU mühitində 120k+ nümunə ilə transformer fine-tune etmək saatlarla (bəzən günlərlə) vaxt aparır.
-- Praktik olaraq bu, məhsuldar deyil: sizə lazım olan əsas şey işlək arxitektura + optimizasiya + benchmark nəticələridir.
-- Ona görə Guardrail üçün:
-  - **az sayda nümunə** (8k unsafe + 8k safe, lakin sonra bu sayı da benchmark hissəsində 5k-ya qədər azaltmalı oldum)
-  - **yüksək batch** (ilk öncə 32, sonra 96, sonda isə worst-case scenario ilə rastlaşdığım üçün **128**)
-  - **qısa max_len**
-  istifadə etdim ki, iterasiya sürətli olsun və pipeline tam bağlansın.
-
-Bu arada, skriptlər “full dataset”lə işləməyi də dəstəkləyir — istəsəniz `--max_unsafe 0` ilə bütün UNSAFE dataseti götürüb SAFE-ni də ona uyğun balanslaya bilərsiniz.
+Burada NER modeli BIO formatında öyrədilir:
+- `B-...` → entity başlayır
+- `I-...` → entity davam edir
+- `O` → entity deyil
 
 ---
 
-## Quraşdırma
+## NER datası: generator + BIO-ya çevirmə
+
+`scripts/fake_dataset_generator.py` skripti sintetik data yaradır və nəticəni **span formatında** saxlayır:
+- `ner_train_data.json` (text + entities[start/end/label])
+
+Bizim NER training pipeline isə BIO formatı ilə işlədiyi üçün arada çevirmə addımı var:
+- `scripts/convert_fake_to_bio.py` → `data/synthetic/ner_bio.jsonl` (tokens + tags)
+
+Yəni əsas axın belədir:
+1) fake generator JSON yaradır  
+2) convert script onu BIO-ya çevirir  
+3) train_ner BIO faylından modeli train edir
+
+> Repo-da əlavə olaraq `scripts/synthetic_ner_generator.py` də saxlanılıb. Bu “fallback” üçündür: internet/faker problemi olanda, eyni pipeline-ı yenə də ayağa qaldırmaq mümkün olsun.
+
+---
+
+## Niyə full dataset ilə uzun training etmədim?
+
+Bu tapşırıqda əsas gözlənti “ultimate model” yox, **pipeline + optimizasiya + düşüncə tərzi**dir.
+
+CPU mühitində böyük dataset ilə transformer training iterasiya müddətini əhəmiyyətli dərəcədə artırır. Bu səbəbdən ilkin mərhələdə limitli dataset ilə sürətli iterasiya strategiyası seçilmişdir.
+
+Bu sayədə həm end-to-end axın bağlandı, həm də ONNX/INT8 optimizasiya hissəsinə keçmək mümkün oldu.
+
+---
+
+## Quraşdırma (Windows / PowerShell)
 
 ```powershell
+cd D:\github_repos\kontakt_home_task\task3
+
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\activate
 
-pip install -r requirements.txt
-pip install -e .
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+python -m pip install faker
+python -m pip install seqeval
 ```
 
-> NER metric üçün `seqeval` modulunu quraşdırmaq lazımdır:
+`pii_guard` modulunun tapılması üçün:
 
 ```powershell
-pip install seqeval
+$env:PYTHONPATH = (Resolve-Path .\src).Path
 ```
 
 ---
 
-## 1) Guardrail dataset yaratmaq (`train_classifier.json`)
+## 1) Guardrail dataset yaratmaq
 
-Sürətli iterasiya üçün (tövsiyə olunan):
+Sürətli (tövsiyə olunan):
 
 ```powershell
 python scripts/build_train_classifier_json.py --filter_safe_pii --max_unsafe 8000
 ```
 
-Tam dataset üçün:
+Tam dataset:
 
 ```powershell
 python scripts/build_train_classifier_json.py --filter_safe_pii --max_unsafe 0
 ```
 
-Nəticə faylı:
+Output:
 
-* `data/processed/train_classifier.json` (JSONL formatında)
+* `data/processed/train_classifier.json`
 
 ---
 
-## 2) Guardrail modelini train etmək (sürətli)
+## 2) Guardrail modeli train etmək
 
-CPU üçün praktik parametrlər:
+CPU üçün praktik run:
 
 ```powershell
 python -m pii_guard.training.train_classifier --epochs 1 --batch 32 --max_len 96
 ```
 
-Model burada saxlanır:
+Model:
 
 * `models/classifier/pytorch/`
 
 ---
 
-## 3) Synthetic NER data yaratmaq
-
-Sürətli demo üçün:
+## 3) NER datasını yaratmaq və BIO-ya çevirmək
 
 ```powershell
-python scripts/synthetic_ner_generator.py --n 5000
-```
-
-Daha çox data üçün:
-
-```powershell
-python scripts/synthetic_ner_generator.py --n 20000
+python scripts/fake_dataset_generator.py
+python scripts/convert_fake_to_bio.py --in ner_train_data.json --out data/synthetic/ner_bio.jsonl
 ```
 
 Output:
@@ -129,30 +139,30 @@ Output:
 
 ---
 
-## 4) NER modelini train etmək (sürətli)
+## 4) NER modeli train etmək
 
 ```powershell
-python -m pii_guard.training.train_ner --epochs 1 --batch 128
+python -m pii_guard.training.train_ner --epochs 1 --batch 128 --data data/synthetic/ner_bio.jsonl
 ```
 
-Model burada saxlanır:
+Model:
 
 * `models/ner/pytorch/`
 
+> Qeyd: Sintetik data çox “təmiz” olduğu üçün metrikalar bəzən çox yüksək görünür. Burada məqsəd real dünyadakı performansı sübut etməkdən çox, pipeline-ın işləməsini və optimizasiya addımlarını göstərməkdir.
+
 ---
 
-## 5) ONNX export + INT8 Quantization
+## 5) ONNX export + INT8 quantization + benchmark
 
-### ONNX export
+Bir komand zənciri ilə:
 
 ```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+
 python -m pii_guard.optimization.export_onnx
-```
-
-### INT8 quantization
-
-```powershell
 python -m pii_guard.optimization.quantize
+python -m pii_guard.optimization.benchmark --n 80
 ```
 
 Nəticə faylları:
@@ -161,45 +171,76 @@ Nəticə faylları:
 * `models/classifier/onnx/model.int8.onnx`
 * `models/ner/onnx/model.onnx`
 * `models/ner/onnx/model.int8.onnx`
+* `reports/benchmarks/bench.json`
 
 ---
 
-## 6) Benchmark (PyTorch vs ONNX vs INT8)
+## Benchmark nəticələri
+
+**Model ölçüləri**
+
+* Classifier ONNX: ~516.34 MB → INT8: ~129.43 MB
+* NER ONNX: ~514.10 MB → INT8: ~128.87 MB
+
+**Orta gecikmə (ms, n=80)**
+
+Classifier:
+
+* PyTorch (SAFE): ~41.66 ms
+* PyTorch (UNSAFE): ~54.41 ms
+* ONNX (SAFE): ~20.77 ms
+* ONNX INT8 (SAFE): ~4.17 ms (əla)
+
+NER:
+
+* PyTorch: ~44.22 ms
+* ONNX: ~22.85 ms
+* ONNX INT8: ~7.80 ms (əla)
+
+Yekun:
+
+* INT8 quantization ölçünü təxminən 4x kiçildir
+* ONNX + INT8 CPU mühitində gecikməni ciddi şəkildə aşağı salır
+
+---
+
+## `fake_dataset_generator.py` faylı haqqında
+
+Tapşırıq mətnində qeyd olunan `synthetic_data_generator.py` əvəzinə `fake_dataset_generator.py` faylı göndərilmişdir.
+
+Bu skript:
+- `ner_train_data.json` faylı yaradır
+- Format: `text` + `entities (start, end, label)` (span-based annotation)
+
+Lakin NER training pipeline BIO formatı ilə işlədiyi üçün arada çevirmə addımı əlavə edilmişdir:
 
 ```powershell
-python -m pii_guard.optimization.benchmark --n 80
+python scripts/fake_dataset_generator.py
+python scripts/convert_fake_to_bio.py --in ner_train_data.json --out data/synthetic/ner_bio.jsonl
 ```
 
-Report:
+Beləliklə:
 
-* `reports/benchmarks/bench.json`
+Generator → raw span data
 
-### Nümunə nəticələr (CPU)
+convert_fake_to_bio.py → BIO format
 
-Bu repoda alınmış real ölçü nəticələri (sizin sistemdə bir az fərqli ola bilər):
+train_ner.py → BIO ilə model training
 
-**Guardrail (Classifier)**
+Repo-da əlavə olaraq scripts/synthetic_ner_generator.py də saxlanılıb. Bu alternativ generator yalnız fallback məqsədi daşıyır (məsələn, internet/faker problemi olduqda pipeline-ın yenə də işləməsi üçün).
 
-* PyTorch: ~47–55 ms
-* ONNX: ~12 ms
-* ONNX INT8: ~4 ms  ✅ (latency < 20ms rahatlıqla)
-
-**Extractor (NER)**
-
-* PyTorch: ~44 ms
-* ONNX: ~22 ms
-* ONNX INT8: ~7 ms
-
-Model ölçüləri də təxminən **4x kiçilir** (ONNX → INT8).
 
 ---
 
 ## Qısa yekun
 
-Bu tapşırıqda məqsəd “ən böyük model + ən uzun training” deyil, **real sistem kimi işləyən pipeline** qurmaqdır:
+Bu repo tapşırığın istədiyi kimi “real sistem” axınını tam göstərir:
 
-* dataset hazırlığı
-* iki mərhələli qərar mexanizmi (cascading)
+* dataset hazırlığı (SAFE/UNSAFE balansı)
+* 2 mərhələli qərar mexanizmi (cascading)
+* NER üçün generator + BIO çevirmə
 * ONNX export
 * INT8 quantization
-* real benchmark
+* benchmark ilə real ölçmə
+
+## Diqqətiniz üçün təşəkkürlər!
